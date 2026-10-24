@@ -112,6 +112,7 @@ test('a desktop session without python3 on its PATH scans with py -3, on every s
     scannedAt: new Date().toISOString(),
   }
   const tried: string[] = []
+  const cwds: (string | undefined)[] = []
 
   mock.store(on)
   mock.clock(on, { now: Date.now() })
@@ -120,6 +121,7 @@ test('a desktop session without python3 on its PATH scans with py -3, on every s
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('process.run', (_, e) => {
     tried.push(e.argv.slice(0, -1).join(' '))
+    cwds.push(e.init?.cwd)
     if (e.argv[0] !== 'py') return { deny: `spawn ${e.argv[0]} ENOENT` }
     return {
       value: {
@@ -135,6 +137,8 @@ test('a desktop session without python3 on its PATH scans with py -3, on every s
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   await $.command.run(RUN)
   expect(tried).toContain('py -3')
+  // The mod's folder, never the session's, where a repo could ship its own python.exe.
+  expect(cwds.every(cwd => cwd !== undefined && cwd !== '/' && cwd === cwds[0])).toBe(true)
 
   for (const surface of ['terminal', 'desktop', 'vscode', 'mobile'] as const) {
     const ui = await $.ui.mount({ ...PANE, surface })
@@ -265,7 +269,8 @@ test('a Python older than 3.7 and an unset pyenv shim are passed over for a newe
   const ui = await scanWith(argv => {
     if (argv[0] === 'python3') return { exitCode: 3, stderr: 'aggregate.py needs Python 3.7 or later' }
     if (argv[0] === '/opt/homebrew/bin/python3') return { exitCode: 127, stderr: 'pyenv: python3: command not found' }
-    if (argv[0] === '/usr/local/bin/python3') return { exitCode: 0, stdout: JSON.stringify(scan) }
+    if (argv[0] === '/usr/bin/python3') return { exitCode: 103, stderr: 'No suitable Python runtime found' }
+    if (argv[0] === 'python') return { exitCode: 0, stdout: JSON.stringify(scan) }
     return undefined
   })($, on)
   expect(await ui.find({ type: 'Text', text: /^62k$/ })).toBeDefined()

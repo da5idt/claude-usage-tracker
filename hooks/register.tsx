@@ -137,12 +137,12 @@ const rescan = async ($: EngineInterface, isForced = false): Promise<void> => {
           fault = 'the scan printed more than 4 MiB'
           break
         }
-        // A Windows Store alias (9009), a pyenv or asdf shim with no version
-        // set (126, 127), an Xcode stub or a Python older than 3.7 (the
+        // A Windows Store alias (9009), a `py` launcher with no Python 3 (103),
+        // a pyenv or asdf shim with no version set (126, 127), an Xcode stub or a Python older than 3.7 (the
         // script's exit 3) is as good as no Python: keep looking. Any other
         // failure is the scan's, which the next would only repeat.
         if (
-          [3, 126, 127, 9009].includes(ran.exitCode) ||
+          [3, 103, 126, 127, 9009].includes(ran.exitCode) ||
           ran.stderr.includes('xcode-select')
         ) {
           continue
