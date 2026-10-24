@@ -29,7 +29,7 @@ In the desktop app, where `/plugin` does not run: click **+** next to the prompt
 
 ## In Claude Desktop
 
-The mod runs in the desktop app's **Code** tab, in sessions on your own machine: install it from a terminal at the user scope, or through **+**, **Plugins** in the app, and it loads in every new local session. Run `/usage-tracker` there and the pane opens beside the chat with the same SVG chart, range and metric buttons. It draws in the VS Code extension and the mobile app the same way.
+The mod runs in the desktop app's **Code** tab, in sessions on your own machine: install it from a terminal at the user scope, or through **+**, **Plugins** in the app, and it loads in every new local session. Run `/usage-tracker` there and the pane opens beside the chat with the same SVG chart, range and metric buttons. The VS Code extension and the mobile app draw the same pane, showing the usage of whichever machine runs the session.
 
 The desktop app starts sessions without your shell's PATH, so the mod looks for Python in the usual install locations itself (see Requirements). A cloud session reads the transcripts in its own container, not your machine's, so its chart shows only that session's usage. The Chat tab does not load Claude Code plugins.
 

@@ -120,7 +120,7 @@ test('a desktop session without python3 on its PATH scans with py -3, on every s
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('process.run', (_, e) => {
     tried.push(e.argv.slice(0, -1).join(' '))
-    if (e.argv[0] !== 'py') throw new Error(`spawn ${e.argv[0]} ENOENT`)
+    if (e.argv[0] !== 'py') return { deny: `spawn ${e.argv[0]} ENOENT` }
     return {
       value: {
         exitCode: 0,
@@ -150,7 +150,72 @@ test('the pane says so when no Python 3 is installed', async ($, on) => {
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('process.run', (_, e) => {
-    throw new Error(`spawn ${e.argv[0]} ENOENT`)
+    return { deny: `spawn ${e.argv[0]} ENOENT` }
+  })
+
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.command.run(RUN)
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await ui.find({ type: 'Text', text: /Python 3 not found/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('an interpreter that runs but fails is passed over, and a script error is shown', async ($, on) => {
+  const tried: string[] = []
+
+  mock.store(on)
+  mock.clock(on, { now: Date.now() })
+  on('command.register', () => ({ value: { command: 'usage-tracker' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('process.run', (_, e) => {
+    tried.push(e.argv[0] ?? '')
+    const result = { stdout: '', isStdoutTruncated: false, isStderrTruncated: false }
+    // python3 on the PATH is an Xcode stub; Homebrew's Python hits a bad transcript.
+    if (e.argv[0] === 'python3') {
+      return { value: { ...result, exitCode: 1, stderr: 'xcode-select: note: No developer tools were found' } }
+    }
+    if (e.argv[0] === '/opt/homebrew/bin/python3') {
+      return {
+        value: {
+          ...result,
+          exitCode: 1,
+          stderr: 'Traceback (most recent call last):\n  File "aggregate.py"\nMemoryError: out of memory',
+        },
+      }
+    }
+    return { deny: `spawn ${e.argv[0]} ENOENT` }
+  })
+
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.command.run(RUN)
+  expect(tried).toEqual(['python3', '/opt/homebrew/bin/python3'])
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await ui.find({ type: 'Text', text: /^Scan failed: MemoryError: out of memory$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('a Windows Store alias counts as no Python', async ($, on) => {
+  mock.store(on)
+  mock.clock(on, { now: Date.now() })
+  on('command.register', () => ({ value: { command: 'usage-tracker' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('process.run', (_, e) => {
+    if (e.argv[0] === 'python3' || e.argv[0] === 'python') {
+      return {
+        value: {
+          exitCode: 9009,
+          stdout: '',
+          stderr: 'Python was not found; run without arguments to install from the Microsoft Store',
+          isStdoutTruncated: false,
+          isStderrTruncated: false,
+        },
+      }
+    }
+    return { deny: `spawn ${e.argv[0]} ENOENT` }
   })
 
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })

@@ -121,7 +121,6 @@ const rescan = async ($: EngineInterface, isForced = false): Promise<void> => {
     const script = `${$.plugin.root}/scripts/aggregate.py`
     let out: string | undefined
     let fault = ''
-    let hasStarted = false
     for (const python of PYTHONS) {
       try {
         const ran = await $.process.run([...python, script], { timeoutMs: 120_000 })
@@ -129,17 +128,29 @@ const rescan = async ($: EngineInterface, isForced = false): Promise<void> => {
           out = ran.stdout
           break
         }
-        // A Python 2 `python`, or a Store or Xcode stub, runs but fails: keep
-        // looking, and report the failure of the last one that ran.
-        hasStarted = true
-        fault = ran.stderr.slice(0, 160) || `exit ${ran.exitCode}`
-      } catch {
-        // Not installed there: try the next.
+        // Windows' Store aliases for python and python3 run and exit 9009 when
+        // no Python is installed: as good as not there.
+        if (ran.exitCode === 9009) continue
+        if (ran.isStdoutTruncated) {
+          fault = 'the scan printed more than 4 MiB'
+          break
+        }
+        // The last line of stderr says what went wrong (a traceback's error).
+        fault = (ran.stderr.trim().split('\n').pop() ?? '').slice(-160) || `exit ${ran.exitCode}`
+        // A traceback is the script failing, which the next interpreter would
+        // only repeat; an Xcode stub fails before it runs, so keep looking.
+        if (ran.stderr.includes('Traceback')) break
+      } catch (error) {
+        const reason = String(error)
+        if (/ENOENT|not found|no such file/i.test(reason)) continue
+        // A timeout or a refusal: another interpreter would scan the same files.
+        fault = reason.slice(0, 160)
+        break
       }
     }
     if (out === undefined) {
       await update($, status, () =>
-        hasStarted
+        fault !== ''
           ? `Scan failed: ${fault}`
           : 'Scan failed: Python 3 not found. Install it from python.org, then press Refresh.',
       )
