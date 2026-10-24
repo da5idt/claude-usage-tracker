@@ -12,6 +12,7 @@ import sys
 
 # datetime.fromisoformat needs 3.7, and Python 2 cannot even import what
 # follows: check before it, and exit 3 so the mod tries another interpreter.
+# Exit 3 means this alone: the mod reads it as "no usable Python".
 if sys.version_info < (3, 7):
     sys.stderr.write('aggregate.py needs Python 3.7 or later\n')
     sys.exit(3)

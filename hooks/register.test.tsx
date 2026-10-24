@@ -256,7 +256,7 @@ test('a Mac with only the Xcode stub is told to install Python', async ($, on) =
   await ui.unmount()
 })
 
-test('a Python older than 3.7 is passed over for a newer one', async ($, on) => {
+test('a Python older than 3.7 and an unset pyenv shim are passed over for a newer one', async ($, on) => {
   const scan = {
     days: { [dayKey(new Date())]: { models: { 'claude-fable-5': [100, 2000, 50000, 10000, 4] }, sessions: 1 } },
     files: 1,
@@ -264,6 +264,7 @@ test('a Python older than 3.7 is passed over for a newer one', async ($, on) => 
   }
   const ui = await scanWith(argv => {
     if (argv[0] === 'python3') return { exitCode: 3, stderr: 'aggregate.py needs Python 3.7 or later' }
+    if (argv[0] === '/opt/homebrew/bin/python3') return { exitCode: 127, stderr: 'pyenv: python3: command not found' }
     if (argv[0] === '/usr/local/bin/python3') return { exitCode: 0, stdout: JSON.stringify(scan) }
     return undefined
   })($, on)
