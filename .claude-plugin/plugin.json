@@ -1,0 +1,8 @@
+{
+  "name": "usage-tracker",
+  "version": "0.1.0",
+  "description": "A pane charting your Claude usage over time, aggregated from local session transcripts.",
+  "author": { "name": "da5idt" },
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}
