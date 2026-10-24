@@ -6,7 +6,9 @@ It aggregates token usage (input, output, cache reads, cache writes) per day and
 
 ## Install
 
-At the prompt of a terminal session (Claude Code 2.1.275 or later):
+The mod needs Claude Code 2.1.275 or later. Check with `claude --version`, and run `claude update` first if you are behind: older versions also fail to read the official plugin marketplace, so any install there stops with `Failed to load all marketplaces ... Invalid schema`.
+
+At the prompt of a terminal session:
 
 ```
 /plugin install usage-tracker --marketplace da5idt/claude-usage-tracker
@@ -16,6 +18,13 @@ Answer `y` to add the marketplace, then pick a scope. From a shell instead:
 
 ```
 claude plugin install usage-tracker --marketplace da5idt/claude-usage-tracker
+```
+
+The same thing in two steps, if you prefer:
+
+```
+/plugin marketplace add da5idt/claude-usage-tracker
+/plugin install usage-tracker@claude-usage-tracker
 ```
 
 In the desktop app, where `/plugin` does not run: click **+** next to the prompt box, then **Plugins**, **Add marketplace** with `da5idt/claude-usage-tracker`, then **Add plugin**.
