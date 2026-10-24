@@ -123,7 +123,12 @@ const rescan = async ($: EngineInterface, isForced = false): Promise<void> => {
     let fault = ''
     for (const python of PYTHONS) {
       try {
-        const ran = await $.process.run([...python, script], { timeoutMs: 120_000 })
+        // Run from the mod's own folder: Windows looks for a bare `py` or
+        // `python` in the working directory first, and a repo could ship one.
+        const ran = await $.process.run([...python, script], {
+          cwd: $.plugin.root,
+          timeoutMs: 120_000,
+        })
         if (ran.exitCode === 0 && !ran.isStdoutTruncated) {
           out = ran.stdout
           break
