@@ -236,6 +236,7 @@ const scanWith = (answer: (argv: readonly string[]) => object | undefined) =>
     on('process.run', (_, e) => {
       const value = answer(e.argv)
       if (value === undefined) return { deny: `spawn ${e.argv[0]} ENOENT` }
+      if ('deny' in value) return value
       return {
         value: { exitCode: 1, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false, ...value },
       }
@@ -255,16 +256,40 @@ test('a Mac with only the Xcode stub is told to install Python', async ($, on) =
   await ui.unmount()
 })
 
-test('a Python 2 or 3.6 is passed over for a newer one', async ($, on) => {
+test('a Python older than 3.7 is passed over for a newer one', async ($, on) => {
+  const scan = {
+    days: { [dayKey(new Date())]: { models: { 'claude-fable-5': [100, 2000, 50000, 10000, 4] }, sessions: 1 } },
+    files: 1,
+    scannedAt: new Date().toISOString(),
+  }
+  const ui = await scanWith(argv => {
+    if (argv[0] === 'python3') return { exitCode: 3, stderr: 'aggregate.py needs Python 3.7 or later' }
+    if (argv[0] === '/usr/local/bin/python3') return { exitCode: 0, stdout: JSON.stringify(scan) }
+    return undefined
+  })($, on)
+  expect(await ui.find({ type: 'Text', text: /^62k$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('a scan that fails without a traceback is reported, not retried', async ($, on) => {
   const tried: string[] = []
   const ui = await scanWith(argv => {
     tried.push(argv[0] ?? '')
-    if (argv[0] === 'python3') return { exitCode: 3, stderr: 'aggregate.py needs Python 3.7 or later' }
-    if (argv[0] === 'python') return { exitCode: 3, stderr: 'aggregate.py needs Python 3.7 or later' }
-    return undefined
+    return argv[0] === 'python3' ? { exitCode: 134, stderr: 'Fatal Python error: Aborted' } : undefined
   })($, on)
-  expect(tried).toContain('python')
-  expect(await ui.find({ type: 'Text', text: /no Python 3\.7 or later found/ })).toBeDefined()
+  expect(tried).toEqual(['python3'])
+  expect(await ui.find({ type: 'Text', text: /^Scan failed: Fatal Python error: Aborted$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('a scan that times out is reported, not retried', async ($, on) => {
+  const tried: string[] = []
+  const ui = await scanWith(argv => {
+    tried.push(argv[0] ?? '')
+    return argv[0] === 'python3' ? { deny: 'process.run timed out after 120000 ms' } : undefined
+  })($, on)
+  expect(tried).toEqual(['python3'])
+  expect(await ui.find({ type: 'Text', text: /timed out/ })).toBeDefined()
   await ui.unmount()
 })
 

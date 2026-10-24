@@ -8,19 +8,21 @@ and prints one JSON object:
   {"days": {"YYYY-MM-DD": {"models": {model: [input, output, cacheRead,
    cacheWrite, messages]}, "sessions": N}}, "files": N, "scannedAt": ISO}
 """
+import sys
+
+# datetime.fromisoformat needs 3.7, and Python 2 cannot even import what
+# follows: check before it, and exit 3 so the mod tries another interpreter.
+if sys.version_info < (3, 7):
+    sys.stderr.write('aggregate.py needs Python 3.7 or later\n')
+    sys.exit(3)
+
 import glob
 import json
 import os
-import sys
 from datetime import datetime, timezone
 
 
 def main():
-    # datetime.fromisoformat and open(encoding=) need 3.7; exit 3 tells the
-    # mod to try another interpreter.
-    if sys.version_info < (3, 7):
-        sys.stderr.write('aggregate.py needs Python 3.7 or later\n')
-        sys.exit(3)
     base = os.environ.get('CLAUDE_CONFIG_DIR') or os.path.expanduser('~/.claude')
     root = sys.argv[1] if len(sys.argv) > 1 else os.path.join(base, 'projects')
     days = {}

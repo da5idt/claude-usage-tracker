@@ -132,18 +132,18 @@ const rescan = async ($: EngineInterface, isForced = false): Promise<void> => {
           fault = 'the scan printed more than 4 MiB'
           break
         }
-        // Only the script failing is worth reporting: a traceback, which the
-        // next interpreter would only repeat. A Windows Store alias (9009), an
-        // Xcode stub or a Python older than 3.7 (the script's exit 3) is as
-        // good as no Python, so keep looking.
-        if (ran.stderr.includes('Traceback')) {
-          // The last line says what went wrong (a traceback's error).
-          fault = (ran.stderr.trim().split('\n').pop() ?? '').slice(-160)
-          break
+        // A Windows Store alias (9009), an Xcode stub or a Python older than
+        // 3.7 (the script's exit 3) is as good as no Python: keep looking.
+        // Any other failure is the scan's, which the next would only repeat.
+        if (ran.exitCode === 9009 || ran.exitCode === 3 || ran.stderr.includes('xcode-select')) {
+          continue
         }
+        // The last line says what went wrong (a traceback's error).
+        fault = (ran.stderr.trim().split('\n').pop() ?? '').slice(-160) || `exit ${ran.exitCode}`
+        break
       } catch (error) {
         const reason = String(error)
-        if (/ENOENT|not found|no such file/i.test(reason)) continue
+        if (reason.includes('ENOENT')) continue
         // A timeout or a refusal: another interpreter would scan the same files.
         fault = reason.slice(0, 160)
         break
