@@ -5,7 +5,16 @@ import type { DayModelRow, Metric, Range, UsageDay, UsageDb } from '../types'
 
 const PANE = 'usage-tracker'
 const TITLE = 'Claude usage'
-const PYTHONS = ['python3', '/opt/homebrew/bin/python3', '/usr/bin/python3']
+// The desktop app starts sessions with the login PATH, not a shell's, so
+// Homebrew and python.org installs are named by path too; Windows has `py`.
+const PYTHONS: string[][] = [
+  ['python3'],
+  ['/opt/homebrew/bin/python3'],
+  ['/usr/local/bin/python3'],
+  ['/usr/bin/python3'],
+  ['py', '-3'],
+  ['python'],
+]
 
 const METRICS: { id: Metric; label: string; color: string }[] = [
   { id: 'total', label: 'Total', color: '#d97757' },
@@ -114,18 +123,47 @@ const rescan = async ($: EngineInterface, isForced = false): Promise<void> => {
     let fault = ''
     for (const python of PYTHONS) {
       try {
-        const ran = await $.process.run([python, script], { timeoutMs: 120_000 })
+        // Run from the mod's own folder: Windows looks for a bare `py` or
+        // `python` in the working directory first, and a repo could ship one.
+        const ran = await $.process.run([...python, script], {
+          cwd: $.plugin.root,
+          timeoutMs: 120_000,
+        })
         if (ran.exitCode === 0 && !ran.isStdoutTruncated) {
           out = ran.stdout
           break
         }
-        fault = ran.stderr.slice(0, 160) || `exit ${ran.exitCode}`
+        if (ran.isStdoutTruncated) {
+          fault = 'the scan printed more than 4 MiB'
+          break
+        }
+        // A Windows Store alias (9009), a `py` launcher with no Python 3 (103),
+        // a pyenv or asdf shim with no version set (126, 127), an Xcode stub or a Python older than 3.7 (the
+        // script's exit 3) is as good as no Python: keep looking. Any other
+        // failure is the scan's, which the next would only repeat.
+        if (
+          [3, 103, 126, 127, 9009].includes(ran.exitCode) ||
+          ran.stderr.includes('xcode-select')
+        ) {
+          continue
+        }
+        // The last line says what went wrong (a traceback's error).
+        fault = (ran.stderr.trim().split('\n').pop() ?? '').slice(-160) || `exit ${ran.exitCode}`
+        break
       } catch (error) {
-        fault = String(error).slice(0, 160)
+        const reason = String(error)
+        if (reason.includes('ENOENT')) continue
+        // A timeout or a refusal: another interpreter would scan the same files.
+        fault = reason.slice(0, 160)
+        break
       }
     }
     if (out === undefined) {
-      await update($, status, () => `Scan failed: ${fault}`)
+      await update($, status, () =>
+        fault !== ''
+          ? `Scan failed: ${fault}`
+          : 'Scan failed: no Python 3.7 or later found. Install it from python.org, then press Refresh.',
+      )
       return
     }
     const scanned = JSON.parse(out) as UsageDb
