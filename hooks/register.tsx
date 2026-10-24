@@ -128,18 +128,19 @@ const rescan = async ($: EngineInterface, isForced = false): Promise<void> => {
           out = ran.stdout
           break
         }
-        // Windows' Store aliases for python and python3 run and exit 9009 when
-        // no Python is installed: as good as not there.
-        if (ran.exitCode === 9009) continue
         if (ran.isStdoutTruncated) {
           fault = 'the scan printed more than 4 MiB'
           break
         }
-        // The last line of stderr says what went wrong (a traceback's error).
-        fault = (ran.stderr.trim().split('\n').pop() ?? '').slice(-160) || `exit ${ran.exitCode}`
-        // A traceback is the script failing, which the next interpreter would
-        // only repeat; an Xcode stub fails before it runs, so keep looking.
-        if (ran.stderr.includes('Traceback')) break
+        // Only the script failing is worth reporting: a traceback, which the
+        // next interpreter would only repeat. A Windows Store alias (9009), an
+        // Xcode stub or a Python older than 3.7 (the script's exit 3) is as
+        // good as no Python, so keep looking.
+        if (ran.stderr.includes('Traceback')) {
+          // The last line says what went wrong (a traceback's error).
+          fault = (ran.stderr.trim().split('\n').pop() ?? '').slice(-160)
+          break
+        }
       } catch (error) {
         const reason = String(error)
         if (/ENOENT|not found|no such file/i.test(reason)) continue
@@ -152,7 +153,7 @@ const rescan = async ($: EngineInterface, isForced = false): Promise<void> => {
       await update($, status, () =>
         fault !== ''
           ? `Scan failed: ${fault}`
-          : 'Scan failed: Python 3 not found. Install it from python.org, then press Refresh.',
+          : 'Scan failed: no Python 3.7 or later found. Install it from python.org, then press Refresh.',
       )
       return
     }

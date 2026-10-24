@@ -157,7 +157,7 @@ test('the pane says so when no Python 3 is installed', async ($, on) => {
   await $.command.run(RUN)
 
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect(await ui.find({ type: 'Text', text: /Python 3 not found/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /no Python 3\.7 or later found/ })).toBeDefined()
   await ui.unmount()
 })
 
@@ -222,6 +222,59 @@ test('a Windows Store alias counts as no Python', async ($, on) => {
   await $.command.run(RUN)
 
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect(await ui.find({ type: 'Text', text: /Python 3 not found/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /no Python 3\.7 or later found/ })).toBeDefined()
+  await ui.unmount()
+})
+
+const scanWith = (answer: (argv: readonly string[]) => object | undefined) =>
+  async ($: Parameters<Parameters<typeof test>[1]>[0], on: Parameters<Parameters<typeof test>[1]>[1]) => {
+    mock.store(on)
+    mock.clock(on, { now: Date.now() })
+    on('command.register', () => ({ value: { command: 'usage-tracker' } }))
+    on('ui.open', () => ({ value: { isPlaced: true } }))
+    on('session.start', (_, e) => ({ cwd: e.cwd }))
+    on('process.run', (_, e) => {
+      const value = answer(e.argv)
+      if (value === undefined) return { deny: `spawn ${e.argv[0]} ENOENT` }
+      return {
+        value: { exitCode: 1, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false, ...value },
+      }
+    })
+    await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+    await $.command.run(RUN)
+    return $.ui.mount({ ...PANE, surface: 'desktop' })
+  }
+
+test('a Mac with only the Xcode stub is told to install Python', async ($, on) => {
+  const ui = await scanWith(argv =>
+    argv[0] === '/usr/bin/python3' || argv[0] === 'python3'
+      ? { stderr: 'xcode-select: note: No developer tools were found, requesting install.' }
+      : undefined,
+  )($, on)
+  expect(await ui.find({ type: 'Text', text: /no Python 3\.7 or later found/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('a Python 2 or 3.6 is passed over for a newer one', async ($, on) => {
+  const tried: string[] = []
+  const ui = await scanWith(argv => {
+    tried.push(argv[0] ?? '')
+    if (argv[0] === 'python3') return { exitCode: 3, stderr: 'aggregate.py needs Python 3.7 or later' }
+    if (argv[0] === 'python') return { exitCode: 3, stderr: 'aggregate.py needs Python 3.7 or later' }
+    return undefined
+  })($, on)
+  expect(tried).toContain('python')
+  expect(await ui.find({ type: 'Text', text: /no Python 3\.7 or later found/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('a scan too large to read stops the search and says why', async ($, on) => {
+  const tried: string[] = []
+  const ui = await scanWith(argv => {
+    tried.push(argv[0] ?? '')
+    return argv[0] === 'python3' ? { exitCode: 0, stdout: '{', isStdoutTruncated: true } : undefined
+  })($, on)
+  expect(tried).toEqual(['python3'])
+  expect(await ui.find({ type: 'Text', text: /more than 4 MiB/ })).toBeDefined()
   await ui.unmount()
 })

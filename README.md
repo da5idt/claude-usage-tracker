@@ -40,4 +40,4 @@ The desktop app starts sessions without your shell's PATH, so the mod looks for 
 
 ## Requirements
 
-- Python 3: `python3` on the PATH, or at `/opt/homebrew/bin/python3`, `/usr/local/bin/python3` or `/usr/bin/python3` on macOS and Linux; on Windows, the `py` launcher or `python`. If none is found the pane says so; install Python from python.org and press Refresh.
+- Python 3.7 or later: `python3` on the PATH, or at `/opt/homebrew/bin/python3`, `/usr/local/bin/python3` or `/usr/bin/python3` on macOS and Linux; on Windows, the `py` launcher or `python`. If none is found the pane says so; install Python from python.org and press Refresh.
