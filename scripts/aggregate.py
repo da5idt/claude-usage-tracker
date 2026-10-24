@@ -24,7 +24,7 @@ def main():
     for path in glob.iglob(os.path.join(root, '**', '*.jsonl'), recursive=True):
         files += 1
         try:
-            fh = open(path, 'r', errors='replace')
+            fh = open(path, 'r', encoding='utf-8', errors='replace')
         except OSError:
             continue
         with fh:

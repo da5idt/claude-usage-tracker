@@ -99,3 +99,64 @@ test('the output metric charts output tokens alone', async ($, on) => {
   expect(await ui.find({ type: 'Text', text: /^2\.0k$/ })).toBeDefined()
   await ui.unmount()
 })
+
+test('a desktop session without python3 on its PATH scans with py -3, on every surface', async ($, on) => {
+  const scan = {
+    days: {
+      [dayKey(new Date())]: {
+        models: { 'claude-fable-5': [100, 2000, 50000, 10000, 4] },
+        sessions: 1,
+      },
+    },
+    files: 1,
+    scannedAt: new Date().toISOString(),
+  }
+  const tried: string[] = []
+
+  mock.store(on)
+  mock.clock(on, { now: Date.now() })
+  on('command.register', () => ({ value: { command: 'usage-tracker' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('process.run', (_, e) => {
+    tried.push(e.argv.slice(0, -1).join(' '))
+    if (e.argv[0] !== 'py') throw new Error(`spawn ${e.argv[0]} ENOENT`)
+    return {
+      value: {
+        exitCode: 0,
+        stdout: JSON.stringify(scan),
+        stderr: '',
+        isStdoutTruncated: false,
+        isStderrTruncated: false,
+      },
+    }
+  })
+
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.command.run(RUN)
+  expect(tried).toContain('py -3')
+
+  for (const surface of ['terminal', 'desktop', 'vscode', 'mobile'] as const) {
+    const ui = await $.ui.mount({ ...PANE, surface })
+    expect(await ui.find({ type: 'Text', text: /^62k$/ })).toBeDefined()
+    await ui.unmount()
+  }
+})
+
+test('the pane says so when no Python 3 is installed', async ($, on) => {
+  mock.store(on)
+  mock.clock(on, { now: Date.now() })
+  on('command.register', () => ({ value: { command: 'usage-tracker' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('process.run', (_, e) => {
+    throw new Error(`spawn ${e.argv[0]} ENOENT`)
+  })
+
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.command.run(RUN)
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await ui.find({ type: 'Text', text: /Python 3 not found/ })).toBeDefined()
+  await ui.unmount()
+})

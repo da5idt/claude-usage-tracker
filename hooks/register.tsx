@@ -5,7 +5,16 @@ import type { DayModelRow, Metric, Range, UsageDay, UsageDb } from '../types'
 
 const PANE = 'usage-tracker'
 const TITLE = 'Claude usage'
-const PYTHONS = ['python3', '/opt/homebrew/bin/python3', '/usr/bin/python3']
+// The desktop app starts sessions with the login PATH, not a shell's, so
+// Homebrew and python.org installs are named by path too; Windows has `py`.
+const PYTHONS: string[][] = [
+  ['python3'],
+  ['/opt/homebrew/bin/python3'],
+  ['/usr/local/bin/python3'],
+  ['/usr/bin/python3'],
+  ['py', '-3'],
+  ['python'],
+]
 
 const METRICS: { id: Metric; label: string; color: string }[] = [
   { id: 'total', label: 'Total', color: '#d97757' },
@@ -112,20 +121,28 @@ const rescan = async ($: EngineInterface, isForced = false): Promise<void> => {
     const script = `${$.plugin.root}/scripts/aggregate.py`
     let out: string | undefined
     let fault = ''
+    let hasStarted = false
     for (const python of PYTHONS) {
       try {
-        const ran = await $.process.run([python, script], { timeoutMs: 120_000 })
+        const ran = await $.process.run([...python, script], { timeoutMs: 120_000 })
         if (ran.exitCode === 0 && !ran.isStdoutTruncated) {
           out = ran.stdout
           break
         }
+        // A Python 2 `python`, or a Store or Xcode stub, runs but fails: keep
+        // looking, and report the failure of the last one that ran.
+        hasStarted = true
         fault = ran.stderr.slice(0, 160) || `exit ${ran.exitCode}`
-      } catch (error) {
-        fault = String(error).slice(0, 160)
+      } catch {
+        // Not installed there: try the next.
       }
     }
     if (out === undefined) {
-      await update($, status, () => `Scan failed: ${fault}`)
+      await update($, status, () =>
+        hasStarted
+          ? `Scan failed: ${fault}`
+          : 'Scan failed: Python 3 not found. Install it from python.org, then press Refresh.',
+      )
       return
     }
     const scanned = JSON.parse(out) as UsageDb
